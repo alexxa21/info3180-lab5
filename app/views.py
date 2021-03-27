@@ -9,6 +9,7 @@ from app import app, db, login_manager
 from flask import render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, current_user, login_required
 from app.forms import LoginForm
+from werkzeug.security import check_password_hash
 from app.models import UserProfile
 
 
@@ -30,11 +31,15 @@ def about():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+     # change this to actually validate the entire form submission
+        # and not just one field
+    if current_user.is_authenticated:
+        return redirect(url_for('secure_page'))
     form = LoginForm()
     if request.method == "POST":
-        # change this to actually validate the entire form submission
-        # and not just one field
-        if form.username.data:
+
+       
+    
             # Get the username and password values from the form.
 
             # using your model, query database for a user based on the username
@@ -44,12 +49,26 @@ def login():
             # passed to the login_user() method below.
 
             # get user id, load into session
-            login_user(user)
-
+        if form.validate_on_submit():
+            username = request.form['username']
+            password = request.form['password']
+            user = UserProfile.query.filter_by(username=username).first()
+            if user is not None and check_password_hash(user.password, password):
+                login_user(user)
             # remember to flash a message to the user
-            return redirect(url_for("home"))  # they should be redirected to a secure-page route instead
+                flash('You are now logged in.', 'success')
+                return redirect(url_for("secure_page"))
+            flash('Account with username {} does not exist or password is incorrect'.format(username), 'danger')
+        flash_errors(form)
     return render_template("login.html", form=form)
 
+
+@app.route("/secure-page")
+@login_required
+def secure_page():
+    if not current_user.is_authenticated:
+        return redirect(url_for('login'))
+    return render_template("secure_page.html")
 
 # user_loader callback. This callback is used to reload the user object from
 # the user ID stored in the session
@@ -60,6 +79,13 @@ def load_user(id):
 ###
 # The functions below should be applicable to all Flask apps.
 ###
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    flash('You are logged out.', 'success')
+    return redirect(url_for('home'))
 
 
 @app.route('/<file_name>.txt')
